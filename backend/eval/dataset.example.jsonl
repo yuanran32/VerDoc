@@ -1,0 +1,1 @@
+{"id":"vue-watch-001","query":"watch 和 watchEffect 有什么区别?","framework":"vue","version":"3.4","golden_chunk_ids":["vue@3.4:guide/essentials/watchers#watcheffect:0001"],"answer_points":["watch 监听明确数据源","watchEffect 自动追踪依赖"]}

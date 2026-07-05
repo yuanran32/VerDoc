@@ -1,0 +1,24 @@
+[project]
+name = "verdoc-backend"
+version = "0.1.0"
+description = "FastAPI RAG service for the VerDoc documentation assistant"
+requires-python = ">=3.12"
+dependencies = [
+  "fastapi>=0.115.0",
+  "pydantic>=2.10.0",
+  "sse-starlette>=2.1.0",
+  "uvicorn[standard]>=0.32.0"
+]
+
+[project.optional-dependencies]
+dev = [
+  "pytest>=8.3.0",
+  "ruff>=0.8.0"
+]
+
+[tool.ruff]
+line-length = 88
+target-version = "py312"
+
+[tool.pytest.ini_options]
+testpaths = ["eval", "tests"]
