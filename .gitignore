@@ -1,0 +1,28 @@
+# Dependencies
+node_modules/
+.pnpm-store/
+.venv/
+__pycache__/
+*.py[cod]
+
+# Build outputs
+.next/
+out/
+dist/
+build/
+.ruff_cache/
+.pytest_cache/
+
+# Local env
+.env
+.env.*
+!.env.example
+
+# Logs
+*.log
+
+# OS/editor
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
