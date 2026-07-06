@@ -1,5 +1,7 @@
 from fastapi import APIRouter
 
+from app.rag.corpus import SUPPORTED_VERSIONS
+
 router = APIRouter(tags=["meta"])
 
 
@@ -7,6 +9,6 @@ router = APIRouter(tags=["meta"])
 async def meta() -> dict[str, list[dict[str, object]]]:
     return {
         "frameworks": [
-            {"id": "vue", "name": "Vue", "versions": ["3.4"]},
+            {"id": "vue", "name": "Vue", "versions": list(SUPPORTED_VERSIONS)},
         ]
     }

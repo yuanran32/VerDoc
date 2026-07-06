@@ -4,7 +4,12 @@ from collections import Counter
 from collections.abc import Iterable
 from functools import lru_cache
 
-from app.rag.corpus import DEFAULT_FRAMEWORK, DEFAULT_VERSION, load_chunks
+from app.rag.corpus import (
+    DEFAULT_FRAMEWORK,
+    DEFAULT_VERSION,
+    SUPPORTED_VERSIONS,
+    load_chunks,
+)
 from app.rag.fusion import reciprocal_rank_fusion
 from app.rag.schemas import DocumentChunk, RetrievedChunk
 
@@ -57,7 +62,7 @@ async def retrieve(
         return []
 
     requested_version = version or DEFAULT_VERSION
-    if requested_version != DEFAULT_VERSION:
+    if requested_version not in SUPPORTED_VERSIONS:
         return []
 
     query_terms = tokenize(query)
@@ -66,10 +71,23 @@ async def retrieve(
 
     index = get_index()
     pool_size = max(limit * 3, RETRIEVAL_POOL_SIZE)
-    bm25_results = bm25_retrieve(query_terms=query_terms, index=index, limit=pool_size)
+    candidate_chunks = index.filter_chunks(
+        framework=framework,
+        version=requested_version,
+    )
+    if not candidate_chunks:
+        return []
+
+    bm25_results = bm25_retrieve(
+        query_terms=query_terms,
+        chunks=candidate_chunks,
+        index=index,
+        limit=pool_size,
+    )
     keyword_results = keyword_retrieve(
         query=query,
         query_terms=query_terms,
+        chunks=candidate_chunks,
         index=index,
         limit=pool_size,
     )
@@ -97,6 +115,13 @@ class LocalIndex:
         total_length = sum(self.document_lengths.values())
         self.average_document_length = total_length / max(self.document_count, 1)
 
+    def filter_chunks(self, framework: str, version: str) -> list[DocumentChunk]:
+        return [
+            chunk
+            for chunk in self.chunks
+            if chunk.framework == framework and chunk.version == version
+        ]
+
 
 @lru_cache(maxsize=1)
 def get_index() -> LocalIndex:
@@ -105,12 +130,13 @@ def get_index() -> LocalIndex:
 
 def bm25_retrieve(
     query_terms: Counter[str],
+    chunks: list[DocumentChunk],
     index: LocalIndex,
     limit: int,
 ) -> list[RetrievedChunk]:
     scored: list[RetrievedChunk] = []
 
-    for chunk in index.chunks:
+    for chunk in chunks:
         if not has_sufficient_evidence(query_terms=query_terms, chunk=chunk, index=index):
             continue
 
@@ -124,12 +150,13 @@ def bm25_retrieve(
 def keyword_retrieve(
     query: str,
     query_terms: Counter[str],
+    chunks: list[DocumentChunk],
     index: LocalIndex,
     limit: int,
 ) -> list[RetrievedChunk]:
     scored: list[RetrievedChunk] = []
 
-    for chunk in index.chunks:
+    for chunk in chunks:
         if not has_sufficient_evidence(query_terms=query_terms, chunk=chunk, index=index):
             continue
 
