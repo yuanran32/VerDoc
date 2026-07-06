@@ -17,7 +17,7 @@ export async function* parseSseStream(
     }
 
     buffer += decoder.decode(value, { stream: true });
-    const chunks = buffer.split("\n\n");
+    const chunks = buffer.split(/\r?\n\r?\n/);
     buffer = chunks.pop() ?? "";
 
     for (const chunk of chunks) {
@@ -28,6 +28,8 @@ export async function* parseSseStream(
     }
   }
 
+  buffer += decoder.decode();
+
   if (buffer.trim()) {
     const event = parseSseChunk(buffer);
     if (event) {
@@ -37,7 +39,7 @@ export async function* parseSseStream(
 }
 
 function parseSseChunk(chunk: string): SseEvent | null {
-  const lines = chunk.split("\n");
+  const lines = chunk.split(/\r?\n/);
   let event: string | undefined;
   const data: string[] = [];
 
