@@ -12,6 +12,8 @@ dist/
 build/
 .ruff_cache/
 .pytest_cache/
+backend/data/
+*.tsbuildinfo
 
 # Local env
 .env
