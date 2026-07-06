@@ -37,18 +37,35 @@ The backend exposes:
 - `GET /api/meta`
 - `POST /api/chat` with SSE response
 
-## Current Scaffold
+## Current Status
 
 - Next.js page shell with version picker, message list, and citation panel
 - FastAPI app with `/api/chat`, `/api/meta`, and `/health`
+- V0 backend RAG path over built-in Vue 3.4 documentation chunks
+- Local lexical retrieval with framework/version filtering
+- Deterministic extractive answer streaming with citations
+- Explicit refusal for unsupported frameworks, unsupported versions, and low-evidence queries
+- V1 frontend demo with SSE streaming, Markdown rendering, clickable citation badges, source panel highlighting, and refusal display
 - RAG module boundaries for retriever, fusion, reranker, prompt, and LLM streaming
 - Offline pipeline placeholders for fetch, parse, chunk, and embed
 - Evaluation placeholders and sample JSONL dataset
 
+## Verification
+
+```bash
+cd backend
+uv run --extra dev pytest
+uv run --extra dev ruff check .
+
+cd ../frontend
+pnpm typecheck
+pnpm build
+```
+
 ## Next Milestones
 
-1. Wire frontend form submission to `/api/chat`.
-2. Replace placeholder retrieval with real Vue documentation chunks.
-3. Add embedding and Chroma index creation.
-4. Add BM25, RRF, and reranker.
-5. Build a small evaluation set before tuning retrieval.
+1. Replace the built-in V0 corpus with fetched Vue documentation snapshots.
+2. Add embedding and Chroma index creation.
+3. Add BM25, RRF, and reranker for V2.
+4. Build a small evaluation set before tuning retrieval.
+5. Add multi-version data and pre-filtering for V3.
