@@ -12,6 +12,9 @@ dist/
 build/
 .ruff_cache/
 .pytest_cache/
+.pytest-tmp/
+.tmp/
+.verdoc-data/
 backend/data/
 *.tsbuildinfo
 

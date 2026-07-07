@@ -42,13 +42,25 @@ The backend exposes:
 - Next.js page shell with version picker, message list, and citation panel
 - FastAPI app with `/api/chat`, `/api/meta`, and `/health`
 - V0 backend RAG path over built-in Vue 3.4 documentation chunks
-- Local lexical retrieval with framework/version filtering
+- Local BM25, keyword, and persisted lightweight semantic vector retrieval with framework/version filtering
 - Deterministic extractive answer streaming with citations
 - Explicit refusal for unsupported frameworks, unsupported versions, and low-evidence queries
 - V1 frontend demo with SSE streaming, Markdown rendering, clickable citation badges, source panel highlighting, and refusal display
-- RAG module boundaries for retriever, fusion, reranker, prompt, and LLM streaming
-- Offline pipeline placeholders for fetch, parse, chunk, and embed
-- Evaluation placeholders and sample JSONL dataset
+- V2 retrieval path with RRF fusion and lightweight reranking
+- Multi-version Vue 3.4 / 3.3 filtering with version conflict hints
+- Configurable per-client `/api/chat` rate limiting for demo protection
+- Offline fetch, parse, chunk, and local vector index pipeline
+- Evaluation CLI with sample JSONL dataset, hit@5, and refusal accuracy
+
+Build the local vector index:
+
+```bash
+cd backend
+uv run python -m pipeline.embed
+```
+
+The default index is written to `.verdoc-data/vectors/vue-index.jsonl`. Set
+`VERDOC_VECTOR_INDEX_PATH` to point the API at another index file.
 
 ## Verification
 
@@ -64,8 +76,8 @@ pnpm build
 
 ## Next Milestones
 
-1. Replace the built-in V0 corpus with fetched Vue documentation snapshots.
-2. Add embedding and Chroma index creation.
-3. Add BM25, RRF, and reranker for V2.
-4. Build a small evaluation set before tuning retrieval.
-5. Add multi-version data and pre-filtering for V3.
+1. Replace the remaining built-in fallback corpus with versioned documentation snapshots.
+2. Add model-backed embedding generation and Chroma index creation.
+3. Expand the evaluation set before tuning retrieval further.
+4. Add deployment configuration and cost/latency metrics.
+5. Add multi-turn follow-up support and feedback collection.
