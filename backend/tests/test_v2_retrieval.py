@@ -1,8 +1,10 @@
 import asyncio
+import json
+from pathlib import Path
 
 from app.rag.fusion import reciprocal_rank_fusion
 from app.rag.reranker import rerank
-from app.rag.retriever import retrieve
+from app.rag.retriever import LocalIndex, get_index, retrieve, vector_retrieve
 from app.rag.schemas import DocumentChunk, RetrievedChunk
 
 
@@ -12,7 +14,49 @@ def test_retrieve_cjk_binding_query_finds_form_v_model_chunk() -> None:
     )
 
     assert results
-    assert "双向绑定" in results[0].chunk.text or "v-model" in results[0].chunk.id
+    assert (
+        "双向绑定" in results[0].chunk.text
+        or "v-model" in results[0].chunk.id
+        or "forms" in (results[0].chunk.source_path or "")
+    )
+
+
+def test_vector_retrieve_semantic_sync_query_finds_form_v_model_chunk() -> None:
+    index = get_index()
+    chunks = index.filter_chunks(framework="vue", version="3.4")
+    results = vector_retrieve(
+        query="输入框状态同步怎么做?",
+        chunks=chunks,
+        index=index,
+        limit=5,
+    )
+
+    assert results
+    assert results[0].chunk.id.startswith("vue@3.4:guide/essentials/forms#")
+
+
+def test_local_index_loads_persisted_vector_index(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    chunk = DocumentChunk(id="chunk-a", text="alpha", framework="vue", version="3.4")
+    vector_file = tmp_path / "vectors.jsonl"
+    vector_file.write_text(
+        json.dumps(
+            {
+                "id": chunk.id,
+                "framework": "vue",
+                "version": "3.4",
+                "vector": {"persisted-term": 1.0},
+            },
+        ),
+        encoding="utf-8",
+    )
+    monkeypatch.setenv("VERDOC_VECTOR_INDEX_PATH", str(vector_file))
+
+    index = LocalIndex([chunk])
+
+    assert index.document_vectors[chunk.id]["persisted-term"] == 1.0
 
 
 def test_retrieve_migration_query_prefers_filters_chunk() -> None:

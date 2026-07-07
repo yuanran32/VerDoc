@@ -3,6 +3,7 @@ from pathlib import Path
 
 from app.rag.corpus import load_chunks
 from pipeline.chunk import chunk_docs
+from pipeline.embed import embed_chunks
 from pipeline.fetch import fetch_docs
 from pipeline.parse import parse_docs
 
@@ -92,3 +93,11 @@ watch 适合监听明确的数据源。
     loaded_chunks = load_chunks(chunks_file)
     assert loaded_chunks[0].id == chunks[0].id
     assert loaded_chunks[0].heading_path == ["侦听器", "watchEffect()"]
+
+    vector_file = tmp_path / "vectors" / "vue-index.jsonl"
+    vector_records = embed_chunks(input_file=chunks_file, output_file=vector_file)
+
+    assert vector_file.exists()
+    assert len(vector_records) == len(chunks)
+    assert vector_records[0]["id"] == chunks[0].id
+    assert vector_records[0]["vector"]

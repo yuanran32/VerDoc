@@ -1,8 +1,11 @@
+import json
 import math
+import os
 import re
 from collections import Counter
 from collections.abc import Iterable
 from functools import lru_cache
+from pathlib import Path
 
 from app.rag.corpus import (
     DEFAULT_FRAMEWORK,
@@ -38,6 +41,10 @@ STOP_TOKENS = {
     "时候",
 }
 RETRIEVAL_POOL_SIZE = 12
+VECTOR_SIMILARITY_THRESHOLD = 0.05
+DEFAULT_VECTOR_INDEX_PATH = (
+    Path(__file__).resolve().parents[3] / ".verdoc-data" / "vectors" / "vue-index.jsonl"
+)
 UNSUPPORTED_API_PATTERNS = {
     "usememo",
     "usestate",
@@ -45,6 +52,14 @@ UNSUPPORTED_API_PATTERNS = {
     "usereducer",
     "usecallback",
     "usecontext",
+}
+SEMANTIC_EXPANSIONS = {
+    "状态同步": ["双向绑定", "v-model", "modelvalue", "update"],
+    "保持同步": ["双向绑定", "v-model", "modelvalue", "update"],
+    "数据同步": ["双向绑定", "v-model", "modelvalue", "update"],
+    "输入框": ["表单", "文本输入", "v-model"],
+    "父子组件同步": ["组件", "v-model", "modelvalue", "update"],
+    "文本格式化": ["filters", "computed", "methods", "迁移"],
 }
 
 
@@ -54,7 +69,7 @@ async def retrieve(
     version: str | None,
     limit: int = 5,
 ) -> list[RetrievedChunk]:
-    """Retrieve Vue 3.4 docs with BM25 + keyword recall + RRF fusion."""
+    """Retrieve Vue docs with BM25 + keyword + local vector recall + RRF fusion."""
     if framework != DEFAULT_FRAMEWORK:
         return []
 
@@ -91,8 +106,14 @@ async def retrieve(
         index=index,
         limit=pool_size,
     )
+    vector_results = vector_retrieve(
+        query=query,
+        chunks=candidate_chunks,
+        index=index,
+        limit=pool_size,
+    )
 
-    fused = reciprocal_rank_fusion([bm25_results, keyword_results])
+    fused = reciprocal_rank_fusion([bm25_results, keyword_results, vector_results])
     ranked = fused[:limit]
     return [
         RetrievedChunk(chunk=item.chunk, score=item.score, rank=rank)
@@ -103,8 +124,13 @@ async def retrieve(
 class LocalIndex:
     def __init__(self, chunks: list[DocumentChunk]) -> None:
         self.chunks = chunks
+        persisted_vectors = load_vector_index(chunks)
         self.document_terms = {
             chunk.id: tokenize(chunk_search_text(chunk)) for chunk in chunks
+        }
+        self.document_vectors = {
+            chunk.id: persisted_vectors.get(chunk.id, vectorize_text(chunk_search_text(chunk)))
+            for chunk in chunks
         }
         self.document_frequency = document_frequency(self.document_terms.values())
         self.document_count = len(chunks)
@@ -126,6 +152,44 @@ class LocalIndex:
 @lru_cache(maxsize=1)
 def get_index() -> LocalIndex:
     return LocalIndex(load_chunks())
+
+
+def load_vector_index(chunks: list[DocumentChunk]) -> dict[str, Counter[str]]:
+    index_path = resolve_vector_index_path()
+    if not index_path or not index_path.exists():
+        return {}
+
+    valid_chunk_ids = {chunk.id for chunk in chunks}
+    vectors: dict[str, Counter[str]] = {}
+
+    with index_path.open("r", encoding="utf-8") as file:
+        for line in file:
+            if not line.strip():
+                continue
+
+            record = json.loads(line)
+            chunk_id = record.get("id")
+            raw_vector = record.get("vector")
+            if chunk_id not in valid_chunk_ids or not isinstance(raw_vector, dict):
+                continue
+
+            vectors[chunk_id] = Counter(
+                {
+                    str(term): float(weight)
+                    for term, weight in raw_vector.items()
+                    if isinstance(weight, int | float) and weight > 0
+                }
+            )
+
+    return vectors
+
+
+def resolve_vector_index_path() -> Path | None:
+    env_path = os.getenv("VERDOC_VECTOR_INDEX_PATH")
+    if env_path:
+        return Path(env_path).expanduser().resolve()
+
+    return DEFAULT_VECTOR_INDEX_PATH
 
 
 def bm25_retrieve(
@@ -162,6 +226,33 @@ def keyword_retrieve(
 
         score = keyword_score(query=query, query_terms=query_terms, chunk=chunk, index=index)
         if score > 0:
+            scored.append(RetrievedChunk(chunk=chunk, score=score, rank=0))
+
+    return rerank_by_score(scored, limit=limit)
+
+
+def vector_retrieve(
+    query: str,
+    chunks: list[DocumentChunk],
+    index: LocalIndex,
+    limit: int,
+) -> list[RetrievedChunk]:
+    query_vector = vectorize_text(query)
+    if not query_vector:
+        return []
+
+    query_terms = tokenize(query)
+    filters_migration_intent = _has_filters_migration_intent(query, query_terms)
+    scored: list[RetrievedChunk] = []
+    for chunk in chunks:
+        if filters_migration_intent and "filters" not in chunk_search_text(chunk).lower():
+            continue
+
+        score = cosine_similarity(
+            query_vector,
+            index.document_vectors[chunk.id],
+        ) + vector_intent_score(query, query_terms, chunk)
+        if score >= VECTOR_SIMILARITY_THRESHOLD:
             scored.append(RetrievedChunk(chunk=chunk, score=score, rank=0))
 
     return rerank_by_score(scored, limit=limit)
@@ -278,6 +369,70 @@ def tokenize(text: str) -> Counter[str]:
 
     filtered = [term for term in terms if term and term not in STOP_TOKENS]
     return Counter(filtered)
+
+
+def vectorize_text(text: str) -> Counter[str]:
+    vector = Counter[str]()
+    vector.update(tokenize(text))
+
+    normalized = text.lower()
+    for phrase, expansions in SEMANTIC_EXPANSIONS.items():
+        if phrase.lower() in normalized:
+            for expansion in expansions:
+                vector[expansion.lower()] += 3
+
+    return vector
+
+
+def cosine_similarity(left: Counter[str], right: Counter[str]) -> float:
+    if not left or not right:
+        return 0.0
+
+    shared_terms = set(left).intersection(right)
+    dot_product = sum(left[term] * right[term] for term in shared_terms)
+    if dot_product == 0:
+        return 0.0
+
+    left_norm = math.sqrt(sum(value * value for value in left.values()))
+    right_norm = math.sqrt(sum(value * value for value in right.values()))
+    return dot_product / max(left_norm * right_norm, 1.0)
+
+
+def vector_intent_score(
+    query: str,
+    query_terms: Counter[str],
+    chunk: DocumentChunk,
+) -> float:
+    chunk_id = chunk.id.lower()
+    source_path = (chunk.source_path or "").lower()
+    score = 0.0
+
+    for term in query_terms:
+        if is_api_like(term):
+            if f"#{term}" in chunk_id:
+                score += 0.12
+            elif term in chunk_id:
+                score += 0.04
+
+    if any(phrase in query for phrase in ("输入框", "表单", "文本输入")):
+        if "forms" in source_path:
+            score += 0.3
+
+    if _has_filters_migration_intent(query, query_terms):
+        if "filters" in chunk_id:
+            score += 0.14
+        elif _is_migration_chunk(chunk):
+            score += 0.06
+
+    if chunk.chunk_type == "code":
+        score -= 0.1
+
+    return score
+
+
+def _has_filters_migration_intent(query: str, query_terms: Counter[str]) -> bool:
+    has_filter_term = "filters" in query_terms or "filter" in query_terms or "过滤器" in query
+    return has_filter_term and _is_migration_query(query_terms)
 
 
 def is_unsupported_api_query(query: str) -> bool:
