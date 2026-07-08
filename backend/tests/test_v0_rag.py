@@ -98,6 +98,66 @@ def test_answer_question_reports_version_conflict_with_citation() -> None:
     assert events[-1]["event"] == "done"
 
 
+def test_answer_question_uses_history_for_follow_up_advice() -> None:
+    events = asyncio.run(
+        _collect_events(
+            answer_question(
+                query="给个使用建议",
+                framework="vue",
+                version="3.4",
+                history=[
+                    {
+                        "role": "user",
+                        "content": "watch 和 watchEffect 有什么区别?",
+                    },
+                    {
+                        "role": "assistant",
+                        "content": "watch 监听明确来源，watchEffect 自动追踪依赖。",
+                    },
+                ],
+            )
+        )
+    )
+
+    token_text = "".join(
+        event["data"]["text"] for event in events if event["event"] == "token"
+    )
+
+    assert "watchEffect" in token_text
+    assert events[-1]["event"] == "done"
+
+
+def test_answer_question_uses_history_for_version_follow_up() -> None:
+    events = asyncio.run(
+        _collect_events(
+            answer_question(
+                query="那 Vue 3.3 呢?",
+                framework="vue",
+                version="3.4",
+                history=[
+                    {
+                        "role": "user",
+                        "content": "defineModel 怎么用?",
+                    },
+                    {
+                        "role": "assistant",
+                        "content": "defineModel 是 Vue 3.4 的宏。",
+                    },
+                ],
+            )
+        )
+    )
+
+    token_text = "".join(
+        event["data"]["text"] for event in events if event["event"] == "token"
+    )
+
+    assert "Vue 3.3" in token_text
+    assert "Vue 3.4" in token_text
+    assert "不适用" in token_text
+    assert events[-1]["event"] == "done"
+
+
 def test_answer_question_rejects_unsupported_version() -> None:
     events = asyncio.run(
         _collect_events(

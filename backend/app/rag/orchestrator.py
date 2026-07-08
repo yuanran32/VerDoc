@@ -1,4 +1,5 @@
 from collections.abc import AsyncGenerator
+import re
 from typing import Any
 
 from app.rag.corpus import DEFAULT_FRAMEWORK, DEFAULT_VERSION, SUPPORTED_VERSIONS
@@ -7,6 +8,22 @@ from app.rag.reranker import rerank
 from app.rag.retriever import retrieve
 from app.rag.schemas import Citation
 
+VERSION_PATTERN = re.compile(r"(?:vue\s*)?(3\.[34])", re.IGNORECASE)
+FOLLOW_UP_MARKERS = {
+    "那",
+    "这个",
+    "上面",
+    "它",
+    "再",
+    "继续",
+    "例子",
+    "示例",
+    "建议",
+    "区别",
+    "3.3",
+    "3.4",
+}
+
 
 async def answer_question(
     query: str,
@@ -14,8 +31,6 @@ async def answer_question(
     version: str | None,
     history: list[dict[str, str]],
 ) -> AsyncGenerator[dict[str, Any], None]:
-    del history
-
     if framework != DEFAULT_FRAMEWORK:
         yield {
             "event": "error",
@@ -25,7 +40,7 @@ async def answer_question(
         }
         return
 
-    requested_version = version or DEFAULT_VERSION
+    requested_version = resolve_requested_version(query=query, selected_version=version)
     if requested_version not in SUPPORTED_VERSIONS:
         yield {
             "event": "error",
@@ -38,12 +53,17 @@ async def answer_question(
         }
         return
 
-    retrieved = await retrieve(query=query, framework=framework, version=requested_version)
-    ranked = await rerank(query=query, chunks=retrieved)
+    search_query = build_contextual_query(query=query, history=history)
+    retrieved = await retrieve(
+        query=search_query,
+        framework=framework,
+        version=requested_version,
+    )
+    ranked = await rerank(query=search_query, chunks=retrieved)
 
     if not ranked:
         conflict_ranked = await _find_newer_version_evidence(
-            query=query,
+            query=search_query,
             framework=framework,
             requested_version=requested_version,
         )
@@ -77,6 +97,42 @@ async def answer_question(
     ]
     yield {"event": "citations", "data": {"items": citations}}
     yield {"event": "done", "data": {"ok": True}}
+
+
+def resolve_requested_version(query: str, selected_version: str | None) -> str:
+    match = VERSION_PATTERN.search(query)
+    if match and match.group(1) in SUPPORTED_VERSIONS:
+        return match.group(1)
+    return selected_version or DEFAULT_VERSION
+
+
+def build_contextual_query(query: str, history: list[dict[str, str]]) -> str:
+    normalized_query = query.strip()
+    previous_user_query = last_user_query(history)
+    if not previous_user_query:
+        return normalized_query
+
+    if is_follow_up_query(normalized_query):
+        return f"{previous_user_query} {normalized_query}"
+
+    return normalized_query
+
+
+def last_user_query(history: list[dict[str, str]]) -> str | None:
+    for message in reversed(history):
+        if message.get("role") == "user":
+            content = message.get("content", "").strip()
+            if content:
+                return content
+    return None
+
+
+def is_follow_up_query(query: str) -> bool:
+    normalized = query.strip().lower()
+    if len(normalized) <= 12:
+        return True
+
+    return any(marker in normalized for marker in FOLLOW_UP_MARKERS)
 
 
 async def _find_newer_version_evidence(
