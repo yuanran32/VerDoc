@@ -4,47 +4,67 @@
 
 :root {
   color-scheme: light;
-  --font-sans: "Inter", "PingFang SC", "Microsoft YaHei", system-ui, -apple-system, sans-serif;
+  --font-sans: -apple-system, BlinkMacSystemFont, "SF Pro Display", "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
   --font-mono: "JetBrains Mono", "Fira Code", "SFMono-Regular", "Consolas", monospace;
 
-  --bg-base: #f6f7f9;
-  --bg-elev: #ffffff;
-  --bg-subtle: #f1f3f5;
-  --bg-inset: #eceef1;
-  --border-base: #e3e6ea;
-  --border-strong: #cfd4da;
-  --text-primary: #0f1115;
-  --text-secondary: #565d66;
-  --text-muted: #8a92a0;
-  --brand: #10b981;
-  --brand-strong: #059669;
+  --bg-base: #eef0f4;
+  --bg-elev: rgba(255, 255, 255, 0.82);
+  --bg-solid: #ffffff;
+  --bg-sidebar: rgba(242, 244, 248, 0.72);
+  --bg-toolbar: rgba(252, 253, 255, 0.7);
+  --bg-subtle: rgba(255, 255, 255, 0.58);
+  --bg-inset: rgba(118, 125, 140, 0.12);
+  --bg-input: rgba(255, 255, 255, 0.86);
+  --bg-control: rgba(255, 255, 255, 0.62);
+  --bg-hover: rgba(92, 103, 121, 0.08);
+  --bg-selected: rgba(255, 255, 255, 0.78);
+  --border-base: rgba(53, 61, 77, 0.12);
+  --border-strong: rgba(53, 61, 77, 0.2);
+  --text-primary: #15171c;
+  --text-secondary: #525966;
+  --text-muted: #8a92a1;
+  --brand: #0a84ff;
+  --brand-strong: #0066d6;
   --brand-soft: color-mix(in srgb, var(--brand) 18%, transparent);
-  --accent: #6366f1;
+  --accent: #30d158;
+  --accent-strong: #248a3d;
   --danger: #e5484d;
   --warning: #f59e0b;
   --code-bg: #0d1117;
   --code-fg: #e6edf3;
+  --window-shadow: 0 22px 70px rgba(20, 28, 43, 0.18), 0 1px 0 rgba(255, 255, 255, 0.72) inset;
+  --panel-shadow: 0 10px 28px rgba(20, 28, 43, 0.08);
 }
 
 .dark {
   color-scheme: dark;
-  --bg-base: #0a0c10;
-  --bg-elev: #12151b;
-  --bg-subtle: #171b22;
-  --bg-inset: #1c2129;
-  --border-base: #232932;
-  --border-strong: #2f3640;
-  --text-primary: #e7eaf0;
-  --text-secondary: #a3abba;
-  --text-muted: #6c7585;
-  --brand: #34d399;
-  --brand-strong: #10b981;
+  --bg-base: #111216;
+  --bg-elev: rgba(35, 37, 44, 0.78);
+  --bg-solid: #202229;
+  --bg-sidebar: rgba(28, 30, 36, 0.72);
+  --bg-toolbar: rgba(33, 35, 42, 0.68);
+  --bg-subtle: rgba(255, 255, 255, 0.07);
+  --bg-inset: rgba(255, 255, 255, 0.09);
+  --bg-input: rgba(12, 14, 18, 0.48);
+  --bg-control: rgba(255, 255, 255, 0.07);
+  --bg-hover: rgba(255, 255, 255, 0.08);
+  --bg-selected: rgba(255, 255, 255, 0.1);
+  --border-base: rgba(255, 255, 255, 0.12);
+  --border-strong: rgba(255, 255, 255, 0.18);
+  --text-primary: #f3f4f7;
+  --text-secondary: #bec4ce;
+  --text-muted: #858d9a;
+  --brand: #0a84ff;
+  --brand-strong: #64aaff;
   --brand-soft: color-mix(in srgb, var(--brand) 20%, transparent);
-  --accent: #818cf8;
+  --accent: #30d158;
+  --accent-strong: #7ee787;
   --danger: #ff6b6b;
   --warning: #fbbf24;
   --code-bg: #06090e;
   --code-fg: #d6deeb;
+  --window-shadow: 0 22px 70px rgba(0, 0, 0, 0.44), 0 1px 0 rgba(255, 255, 255, 0.08) inset;
+  --panel-shadow: 0 12px 32px rgba(0, 0, 0, 0.24);
 }
 
 * {
@@ -63,6 +83,7 @@ body {
   color: var(--text-primary);
   font-family: var(--font-sans);
   font-feature-settings: "cv02", "cv03", "cv04", "cv11";
+  letter-spacing: 0;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   transition: background-color 0.25s ease, color 0.25s ease;
@@ -135,8 +156,38 @@ textarea {
 
 .app-bg {
   background:
-    linear-gradient(180deg, color-mix(in srgb, var(--brand) 5%, transparent) 0%, transparent 320px),
+    linear-gradient(135deg, color-mix(in srgb, var(--brand) 13%, transparent) 0%, transparent 36%),
+    linear-gradient(225deg, color-mix(in srgb, var(--accent) 9%, transparent) 0%, transparent 34%),
+    repeating-linear-gradient(90deg, transparent 0 42px, color-mix(in srgb, var(--text-primary) 2.5%, transparent) 42px 43px),
+    linear-gradient(180deg, color-mix(in srgb, var(--bg-base) 80%, white 10%) 0%, var(--bg-base) 54%),
     var(--bg-base);
+}
+
+.mac-window {
+  background: color-mix(in srgb, var(--bg-elev) 96%, transparent);
+  border: 1px solid var(--border-base);
+  box-shadow: var(--window-shadow);
+  -webkit-backdrop-filter: blur(24px) saturate(1.35);
+  backdrop-filter: blur(24px) saturate(1.35);
+}
+
+.mac-panel {
+  background: var(--bg-subtle);
+  border: 1px solid var(--border-base);
+  box-shadow: var(--panel-shadow);
+  -webkit-backdrop-filter: blur(18px) saturate(1.22);
+  backdrop-filter: blur(18px) saturate(1.22);
+}
+
+.traffic-light {
+  height: 12px;
+  width: 12px;
+  border-radius: 999px;
+  box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.12);
+}
+
+.mac-divide > :not(:last-child) {
+  border-bottom: 1px solid var(--border-base);
 }
 
 /* Markdown body within messages */

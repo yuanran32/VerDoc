@@ -5,6 +5,7 @@ import {
   useEffect,
   useRef,
   useState,
+  type CSSProperties,
   type ReactNode
 } from "react";
 import ReactMarkdown, { type Components } from "react-markdown";
@@ -12,23 +13,48 @@ import remarkGfm from "remark-gfm";
 
 import { highlightCode } from "@/lib/highlight";
 
+type Citation = {
+  id: string;
+  title: string;
+  sourceUrl?: string | null;
+  excerpt: string;
+};
+
 type Message = {
   id: string;
   role: "user" | "assistant";
   content: string;
   status?: "streaming" | "done" | "error";
+  citations?: Citation[];
+  feedback?: FeedbackState;
+};
+
+type FeedbackRating = "up" | "down";
+
+type FeedbackState = {
+  rating: FeedbackRating;
+  note?: string;
+  status: "submitting" | "submitted" | "error";
 };
 
 type MessageListProps = {
   messages: Message[];
   activeCitationId: string | null;
-  onCitationSelect: (citationId: string) => void;
+  activeMessageId: string | null;
+  onCitationSelect: (messageId: string, citationId: string) => void;
+  onFeedbackSubmit: (
+    messageId: string,
+    rating: FeedbackRating,
+    note?: string
+  ) => void;
 };
 
 export function MessageList({
   activeCitationId,
+  activeMessageId,
   messages,
-  onCitationSelect
+  onCitationSelect,
+  onFeedbackSubmit
 }: MessageListProps) {
   const scrollRef = useRef<HTMLDivElement | null>(null);
   const shouldStickToBottomRef = useRef(true);
@@ -52,17 +78,19 @@ export function MessageList({
 
   return (
     <div
-      className="flex-1 overflow-y-auto px-5 py-6"
+      className="min-h-0 flex-1 overflow-y-auto px-4 py-6 sm:px-6"
       onScroll={handleScroll}
       ref={scrollRef}
     >
-      <div className="mx-auto flex w-full max-w-3xl flex-col gap-7">
+      <div className="mx-auto flex w-full max-w-3xl flex-col gap-6">
         {messages.map((message) => (
           <MessageBubble
             activeCitationId={activeCitationId}
+            activeMessageId={activeMessageId}
             key={message.id}
             message={message}
             onCitationSelect={onCitationSelect}
+            onFeedbackSubmit={onFeedbackSubmit}
           />
         ))}
       </div>
@@ -72,18 +100,27 @@ export function MessageList({
 
 type MessageBubbleProps = {
   activeCitationId: string | null;
+  activeMessageId: string | null;
   message: Message;
-  onCitationSelect: (citationId: string) => void;
+  onCitationSelect: (messageId: string, citationId: string) => void;
+  onFeedbackSubmit: (
+    messageId: string,
+    rating: FeedbackRating,
+    note?: string
+  ) => void;
 };
 
 const MessageBubble = memo(function MessageBubble({
   activeCitationId,
+  activeMessageId,
   message,
-  onCitationSelect
+  onCitationSelect,
+  onFeedbackSubmit
 }: MessageBubbleProps) {
   const isUser = message.role === "user";
   const isError = message.status === "error";
   const isStreaming = message.status === "streaming";
+  const isMessageActive = message.id === activeMessageId;
 
   return (
     <article
@@ -95,7 +132,7 @@ const MessageBubble = memo(function MessageBubble({
         className="flex min-w-0 flex-col gap-1.5"
         style={{
           alignItems: isUser ? "flex-end" : "flex-start",
-          maxWidth: "min(680px, 82%)"
+          maxWidth: "min(680px, 84%)"
         }}
       >
         <div
@@ -113,6 +150,13 @@ const MessageBubble = memo(function MessageBubble({
               }}
             />
           ) : null}
+          {!isUser && !isStreaming && !isError && message.content ? (
+            <CopyButton
+              className="ml-1 h-5 w-5 opacity-60 hover:opacity-100"
+              label="复制回答"
+              text={message.content}
+            />
+          ) : null}
         </div>
         <div
           className="w-full px-4 py-3 transition-colors"
@@ -120,34 +164,187 @@ const MessageBubble = memo(function MessageBubble({
             background: isError
               ? "color-mix(in srgb, var(--danger) 8%, var(--bg-elev))"
               : isUser
-                ? "color-mix(in srgb, var(--brand) 12%, var(--bg-elev))"
-                : "var(--bg-elev)",
+                ? "linear-gradient(135deg, color-mix(in srgb, var(--brand) 18%, var(--bg-elev)), color-mix(in srgb, var(--brand) 8%, var(--bg-elev)))"
+                : "var(--bg-control)",
             border: `1px solid ${
               isError
                 ? "color-mix(in srgb, var(--danger) 35%, transparent)"
                 : isUser
-                  ? "color-mix(in srgb, var(--brand) 25%, transparent)"
+                  ? "color-mix(in srgb, var(--brand) 26%, transparent)"
                   : "var(--border-base)"
             }`,
             borderRadius: isUser
-              ? "0.875rem 0.25rem 0.875rem 0.875rem"
-              : "0.25rem 0.875rem 0.875rem 0.875rem"
+              ? "14px 6px 14px 14px"
+              : "6px 14px 14px 14px",
+            boxShadow: isUser ? "none" : "var(--panel-shadow)"
           }}
           role={isError ? "alert" : undefined}
         >
           {message.content || isStreaming ? (
             <MarkdownMessage
-              activeCitationId={activeCitationId}
+              activeCitationId={isMessageActive ? activeCitationId : null}
               content={message.content}
               isStreaming={isStreaming}
-              onCitationSelect={onCitationSelect}
+              onCitationSelect={(citationId) =>
+                onCitationSelect(message.id, citationId)
+              }
             />
           ) : null}
         </div>
+        {!isUser && !isStreaming && !isError && message.content ? (
+          <FeedbackControls
+            feedback={message.feedback}
+            messageId={message.id}
+            onFeedbackSubmit={onFeedbackSubmit}
+          />
+        ) : null}
       </div>
     </article>
   );
 });
+
+function FeedbackControls({
+  feedback,
+  messageId,
+  onFeedbackSubmit
+}: {
+  feedback?: FeedbackState;
+  messageId: string;
+  onFeedbackSubmit: (
+    messageId: string,
+    rating: FeedbackRating,
+    note?: string
+  ) => void;
+}) {
+  const [isNoteOpen, setIsNoteOpen] = useState(false);
+  const [note, setNote] = useState("");
+  const isSubmitted = feedback?.status === "submitted";
+  const isSubmitting = feedback?.status === "submitting";
+
+  function submitDown() {
+    onFeedbackSubmit(messageId, "down", note);
+    setIsNoteOpen(false);
+  }
+
+  return (
+    <div className="flex w-full flex-col gap-2">
+      <div className="flex items-center gap-1.5">
+        <FeedbackButton
+          active={feedback?.rating === "up"}
+          disabled={isSubmitted || isSubmitting}
+          label="这个回答有帮助"
+          onClick={() => onFeedbackSubmit(messageId, "up")}
+          tone="up"
+        />
+        <FeedbackButton
+          active={feedback?.rating === "down"}
+          disabled={isSubmitted || isSubmitting}
+          label="这个回答需要改进"
+          onClick={() => setIsNoteOpen((current) => !current)}
+          tone="down"
+        />
+        {feedback ? (
+          <span
+            className="ml-1 text-[11px]"
+            style={{
+              color:
+                feedback.status === "error"
+                  ? "var(--danger)"
+                  : "var(--text-muted)"
+            }}
+          >
+            {feedback.status === "submitting"
+              ? "提交中"
+              : feedback.status === "submitted"
+                ? "已记录"
+                : "提交失败"}
+          </span>
+        ) : null}
+      </div>
+
+      {isNoteOpen && !isSubmitted ? (
+        <div
+          className="rounded-xl border p-2"
+          style={{
+            background: "var(--bg-control)",
+            borderColor: "var(--border-base)"
+          }}
+        >
+          <textarea
+            rows={2}
+            value={note}
+            onChange={(event) => setNote(event.target.value)}
+            placeholder="可选：哪里不准确或不好用？"
+            className="w-full resize-none bg-transparent text-xs outline-none placeholder:text-[var(--text-muted)]"
+            style={{ color: "var(--text-primary)" }}
+          />
+          <div className="mt-2 flex justify-end gap-1.5">
+            <button
+              type="button"
+              onClick={() => setIsNoteOpen(false)}
+              className="focus-ring rounded-lg px-2 py-1 text-xs transition hover:bg-[var(--bg-hover)]"
+              style={{ color: "var(--text-secondary)" }}
+            >
+              取消
+            </button>
+            <button
+              type="button"
+              onClick={submitDown}
+              disabled={isSubmitting}
+              className="focus-ring rounded-lg px-2 py-1 text-xs font-medium transition hover:bg-[var(--bg-hover)] disabled:opacity-55"
+              style={{
+                background: "var(--bg-inset)",
+                color: "var(--danger)"
+              }}
+            >
+              提交
+            </button>
+          </div>
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+function FeedbackButton({
+  active,
+  disabled,
+  label,
+  onClick,
+  tone
+}: {
+  active: boolean;
+  disabled: boolean;
+  label: string;
+  onClick: () => void;
+  tone: FeedbackRating;
+}) {
+  return (
+    <button
+      type="button"
+      aria-label={label}
+      title={label}
+      disabled={disabled}
+      onClick={onClick}
+      className="focus-ring flex h-7 w-7 items-center justify-center rounded-lg border transition hover:bg-[var(--bg-hover)] disabled:cursor-not-allowed disabled:opacity-55"
+      style={{
+        background: active ? "var(--bg-selected)" : "var(--bg-control)",
+        borderColor: active
+          ? tone === "up"
+            ? "var(--accent)"
+            : "var(--danger)"
+          : "var(--border-base)",
+        color: active
+          ? tone === "up"
+            ? "var(--accent-strong)"
+            : "var(--danger)"
+          : "var(--text-secondary)"
+      }}
+    >
+      {tone === "up" ? <ThumbUpIcon /> : <ThumbDownIcon />}
+    </button>
+  );
+}
 
 function Avatar({ role }: { role: "user" | "assistant" }) {
   const isUser = role === "user";
@@ -157,10 +354,12 @@ function Avatar({ role }: { role: "user" | "assistant" }) {
       aria-hidden="true"
       className="flex h-8 w-8 flex-none shrink-0 items-center justify-center rounded-full text-xs font-bold"
       style={{
-        background: isUser ? "var(--bg-inset)" : "var(--brand)",
+        background: isUser
+          ? "var(--bg-inset)"
+          : "linear-gradient(135deg, var(--brand), var(--accent))",
         boxShadow: isUser
           ? "none"
-          : "0 1px 3px color-mix(in srgb, var(--brand) 45%, transparent)",
+          : "0 8px 18px color-mix(in srgb, var(--brand) 22%, transparent)",
         color: isUser ? "var(--text-secondary)" : "#ffffff"
       }}
     >
@@ -185,10 +384,12 @@ function Avatar({ role }: { role: "user" | "assistant" }) {
           stroke="currentColor"
           strokeLinecap="round"
           strokeLinejoin="round"
-          strokeWidth="2.2"
+          strokeWidth="2.1"
         >
-          <path d="M4 6h16M4 6v12a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V6M4 6l1.5-3h13L20 6" />
-          <path d="M9 11h6" />
+          <path d="M7 3.75h6.2L17 7.55v12.7H7z" />
+          <path d="M13 3.75v4h4" />
+          <circle cx="11" cy="13" r="2.8" />
+          <path d="M13.1 15.1 16 18" />
         </svg>
       )}
     </div>
@@ -374,6 +575,12 @@ function CodeBlock({ code, lang }: CodeBlockProps) {
         <span className="dot" style={{ background: "#febc2e" }} />
         <span className="dot" style={{ background: "#28c840" }} />
         <span className="code-lang">{lang || "text"}</span>
+        <CopyButton
+          className="h-6 w-6 hover:bg-[rgba(255,255,255,0.1)]"
+          label="复制代码"
+          style={{ color: "color-mix(in srgb, var(--code-fg) 65%, transparent)" }}
+          text={code}
+        />
       </div>
       {html ? (
         <pre>
@@ -388,8 +595,135 @@ function CodeBlock({ code, lang }: CodeBlockProps) {
   );
 }
 
+type CopyButtonProps = {
+  className?: string;
+  label: string;
+  style?: CSSProperties;
+  text: string;
+};
+
+function CopyButton({ className = "", label, style, text }: CopyButtonProps) {
+  const [copied, setCopied] = useState(false);
+  const timerRef = useRef<number | null>(null);
+
+  useEffect(() => {
+    return () => {
+      if (timerRef.current !== null) window.clearTimeout(timerRef.current);
+    };
+  }, []);
+
+  async function handleCopy() {
+    try {
+      await navigator.clipboard.writeText(text);
+      setCopied(true);
+      if (timerRef.current !== null) window.clearTimeout(timerRef.current);
+      timerRef.current = window.setTimeout(() => setCopied(false), 1500);
+    } catch {
+      // 剪贴板不可用时静默忽略。
+    }
+  }
+
+  return (
+    <button
+      type="button"
+      onClick={handleCopy}
+      aria-label={copied ? "已复制" : label}
+      title={copied ? "已复制" : label}
+      className={`focus-ring inline-flex flex-none items-center justify-center rounded-md transition hover:bg-[var(--bg-hover)] ${className}`}
+      style={{
+        ...style,
+        ...(copied ? { color: "var(--accent-strong)" } : {})
+      }}
+    >
+      {copied ? <CheckIcon /> : <CopyIcon />}
+    </button>
+  );
+}
+
+function CopyIcon() {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      className="h-3.5 w-3.5"
+      fill="none"
+      stroke="currentColor"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      strokeWidth="2"
+    >
+      <rect x="9" y="9" width="11" height="11" rx="2" />
+      <path d="M5 15V5a2 2 0 0 1 2-2h10" />
+    </svg>
+  );
+}
+
+function CheckIcon() {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      className="h-3.5 w-3.5"
+      fill="none"
+      stroke="currentColor"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      strokeWidth="2.4"
+    >
+      <path d="M5 13l4 4L19 7" />
+    </svg>
+  );
+}
+
+function ThumbUpIcon() {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      className="h-3.5 w-3.5"
+      fill="none"
+      stroke="currentColor"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      strokeWidth="2"
+      aria-hidden="true"
+    >
+      <path d="M7 10v10" />
+      <path d="M15 6.5 14 10h5.2a2 2 0 0 1 1.9 2.5l-1.5 5.7A2.4 2.4 0 0 1 17.3 20H7" />
+      <path d="M7 10h2.8L13 4.6a1.5 1.5 0 0 1 2.8 1.1L15 10" />
+      <path d="M3 10h4v10H3z" />
+    </svg>
+  );
+}
+
+function ThumbDownIcon() {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      className="h-3.5 w-3.5"
+      fill="none"
+      stroke="currentColor"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      strokeWidth="2"
+      aria-hidden="true"
+    >
+      <path d="M17 14V4" />
+      <path d="M9 17.5 10 14H4.8a2 2 0 0 1-1.9-2.5l1.5-5.7A2.4 2.4 0 0 1 6.7 4H17" />
+      <path d="M17 14h-2.8L11 19.4a1.5 1.5 0 0 1-2.8-1.1L9 14" />
+      <path d="M17 4h4v10h-4z" />
+    </svg>
+  );
+}
+
 function linkifyCitations(content: string): string {
-  return content.replace(/\[(\d+)\]/g, "[\\[$1\\]](#citation-$1)");
+  // 先按代码段（fence 与行内 code）切分，只在非代码文本里替换 [n]，
+  // 避免 arr[0] 这类代码被误转成引用链接。
+  return content
+    .split(/(```[\s\S]*?(?:```|$)|`[^`\n]*`)/g)
+    .map((segment, index) =>
+      index % 2 === 1
+        ? segment
+        : segment.replace(/\[(\d+)\]/g, "[\\[$1\\]](#citation-$1)")
+    )
+    .join("");
 }
 
 function completeStreamingMarkdown(content: string): string {

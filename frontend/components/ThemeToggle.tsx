@@ -30,16 +30,17 @@ export function ThemeToggle() {
   }, [theme, mounted]);
 
   const isDark = theme === "dark";
+  const label = isDark ? "切换到浅色模式" : "切换到深色模式";
 
   return (
     <button
       type="button"
-      aria-label={isDark ? "切换到浅色模式" : "切换到深色模式"}
-      title={isDark ? "浅色模式" : "深色模式"}
+      aria-label={label}
+      title={label}
       onClick={() => setTheme(isDark ? "light" : "dark")}
-      className="focus-ring flex h-8 w-8 items-center justify-center rounded-lg border transition hover:scale-105"
+      className="focus-ring flex h-8 w-8 items-center justify-center rounded-lg border transition hover:bg-[var(--bg-hover)] disabled:cursor-not-allowed"
       style={{
-        background: "var(--bg-subtle)",
+        background: "var(--bg-control)",
         borderColor: "var(--border-base)",
         color: "var(--text-secondary)"
       }}
