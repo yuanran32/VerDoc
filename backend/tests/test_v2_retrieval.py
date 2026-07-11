@@ -67,6 +67,14 @@ def test_retrieve_migration_query_prefers_filters_chunk() -> None:
     assert results == [] or "filters" in results[0].chunk.id
 
 
+def test_retrieve_refuses_obvious_off_topic_framework_query() -> None:
+    results = asyncio.run(
+        retrieve(query="Next.js App Router 怎么写 layout?", framework="vue", version="3.4")
+    )
+
+    assert results == []
+
+
 def test_rerank_prefers_api_reference_for_definemodel() -> None:
     retrieved = asyncio.run(
         retrieve(query="defineModel 怎么用?", framework="vue", version="3.4")

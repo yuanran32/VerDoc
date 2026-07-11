@@ -53,6 +53,15 @@ UNSUPPORTED_API_PATTERNS = {
     "usecallback",
     "usecontext",
 }
+UNSUPPORTED_TOPIC_PATTERNS = {
+    "app router",
+    "fastapi",
+    "mysql",
+    "next.js",
+    "nextjs",
+    "python",
+    "tailwind",
+}
 SEMANTIC_EXPANSIONS = {
     "状态同步": ["双向绑定", "v-model", "modelvalue", "update"],
     "保持同步": ["双向绑定", "v-model", "modelvalue", "update"],
@@ -436,10 +445,14 @@ def _has_filters_migration_intent(query: str, query_terms: Counter[str]) -> bool
 
 
 def is_unsupported_api_query(query: str) -> bool:
+    normalized_query = query.lower()
     terms = tokenize(query)
     has_react = "react" in terms
     has_unsupported_api = bool(UNSUPPORTED_API_PATTERNS.intersection(terms))
-    return has_react and has_unsupported_api
+    has_unsupported_topic = any(
+        pattern in normalized_query for pattern in UNSUPPORTED_TOPIC_PATTERNS
+    )
+    return has_unsupported_topic or (has_react and has_unsupported_api)
 
 
 def split_cjk_token(token: str) -> list[str]:
