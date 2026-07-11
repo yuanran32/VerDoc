@@ -14,6 +14,7 @@ type MetricsSnapshot = {
   status_counts: Record<string, number>;
   latency_ms: {
     avg: number;
+    p95: number;
     max: number;
   };
   output_chars: {
@@ -554,9 +555,9 @@ function MetricsPanel({
           <div className="grid grid-cols-2 gap-2">
             <MetricCell label="请求" value={formatInteger(metrics?.total_requests)} />
             <MetricCell label="平均延迟" value={`${formatNumber(metrics?.latency_ms.avg)} ms`} />
+            <MetricCell label="P95 延迟" value={`${formatNumber(metrics?.latency_ms.p95)} ms`} />
             <MetricCell label="最大延迟" value={`${formatNumber(metrics?.latency_ms.max)} ms`} />
             <MetricCell label="平均引用" value={formatNumber(metrics?.citations.avg)} />
-            <MetricCell label="输出字符" value={formatInteger(metrics?.output_chars.total)} />
             <MetricCell label="成本" value={`¥${formatCost(metrics?.estimated_cost_cny)}`} />
           </div>
         )}

@@ -40,6 +40,7 @@ type MetricsSnapshot = {
   status_counts: Record<string, number>;
   latency_ms: {
     avg: number;
+    p95: number;
     max: number;
   };
   output_chars: {
@@ -1342,6 +1343,7 @@ function normalizeMetricsSnapshot(value: unknown): MetricsSnapshot | null {
     status_counts: normalizeStatusCounts(value.status_counts),
     latency_ms: {
       avg: numberOrZero(latency.avg),
+      p95: numberOrZero(latency.p95),
       max: numberOrZero(latency.max)
     },
     output_chars: {
