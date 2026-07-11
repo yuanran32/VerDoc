@@ -34,7 +34,11 @@ uv run uvicorn app.main:app --reload --port 8000
 The backend exposes:
 
 - `GET /health`
+- `GET /api/eval/summary`
+- `GET /api/feedback/summary`
 - `GET /api/meta`
+- `GET /api/metrics`
+- `POST /api/feedback`
 - `POST /api/chat` with SSE response
 
 ## Current Status
@@ -49,6 +53,11 @@ The backend exposes:
 - V2 retrieval path with RRF fusion and lightweight reranking
 - Multi-version Vue 3.4 / 3.3 filtering with version conflict hints
 - Configurable per-client `/api/chat` rate limiting for demo protection
+- Persisted JSONL `/api/metrics` snapshot for request counts, avg/P95/max latency, output size, citations, and current demo cost estimate
+- macOS-style inspector metrics panel in the frontend
+- Eval summary API and inspector dashboard for hit@5, refusal accuracy, and failed cases
+- Feedback collection with per-answer up/down controls and recent bad case summary
+- Multi-turn follow-up support using recent chat history for retrieval query completion
 - Offline fetch, parse, chunk, and local vector index pipeline
 - Evaluation CLI with sample JSONL dataset, hit@5, and refusal accuracy
 
@@ -61,6 +70,48 @@ uv run python -m pipeline.embed
 
 The default index is written to `.verdoc-data/vectors/vue-index.jsonl`. Set
 `VERDOC_VECTOR_INDEX_PATH` to point the API at another index file.
+
+## Evaluation
+
+Retrieval quality is tracked with `backend/eval/dataset.example.jsonl`, a 35-case JSONL set covering Vue facts, API usage, version differences, Vue 2 → Vue 3 migration, and off-topic refusal cases.
+
+```bash
+cd backend
+uv run python -m eval.run_eval --dataset eval/dataset.example.jsonl
+```
+
+| Dataset | Cases | hit@5 | Refusal Accuracy | Notes |
+|---|---:|---:|---:|---|
+| `eval/dataset.example.jsonl` | 35 | 93.5% | 100.0% | BM25 + keyword + local vector + RRF + lightweight rerank + off-topic guardrail |
+
+Metrics:
+
+- `hit@5`: whether at least one golden chunk appears in the top 5 retrieved chunks for non-refusal cases.
+- `refusal_accuracy`: whether expected refusal cases return no retrieved evidence.
+- Current evaluation is retrieval/refusal focused; answer faithfulness and citation accuracy are documented as future judge-based metrics.
+
+## Demo Script
+
+Use `docs/demo-script.md` for the fixed presentation flow:
+
+1. citation-grounded Vue answer
+2. Vue 3.3 / 3.4 version-aware behavior
+3. Vue 2 → Vue 3 filters migration
+4. unsupported-framework refusal
+
+## Deployment
+
+Deployment notes are in `docs/deployment.md`.
+
+Key environment variables are listed in `.env.example`, including:
+
+- `NEXT_PUBLIC_API_BASE_URL`
+- `VERDOC_CHUNKS_PATH`
+- `VERDOC_VECTOR_INDEX_PATH`
+- `VERDOC_FEEDBACK_PATH`
+- `VERDOC_CHAT_METRICS_PATH`
+- `VERDOC_CHAT_RATE_LIMIT_PER_HOUR`
+- `VERDOC_CHAT_RATE_LIMIT_WINDOW_SECONDS`
 
 ## Verification
 
@@ -76,8 +127,8 @@ pnpm build
 
 ## Next Milestones
 
-1. Replace the remaining built-in fallback corpus with versioned documentation snapshots.
-2. Add model-backed embedding generation and Chroma index creation.
-3. Expand the evaluation set before tuning retrieval further.
-4. Add deployment configuration and cost/latency metrics.
-5. Add multi-turn follow-up support and feedback collection.
+1. Run and record the expanded evaluation baseline numbers in the README table.
+2. Replace the remaining built-in fallback corpus with versioned documentation snapshots.
+3. Add model-backed embedding generation and Chroma index creation.
+4. Deploy the frontend/backend demo and capture screenshots.
+5. Expand framework coverage beyond Vue.
